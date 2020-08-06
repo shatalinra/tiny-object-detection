@@ -1,8 +1,9 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import tensorflow as tf
 import matplotlib.pyplot as plt
+import autoencoder
 
 raw_file = tf.io.read_file('bolt-sample.jpg')
 image = tf.io.decode_jpeg(raw_file)
@@ -22,55 +23,13 @@ image_patches = tf.image.extract_patches(image_float, ksizes, strides, rates, 'V
 patches_count = image_patches.get_shape().as_list()[1:3]
 image_patches = tf.reshape(image_patches, [-1, patch_size, patch_size, 3])
 
-model = None
+network = autoencoder.Autoencoder(patch_size)
 try:
-    model = tf.keras.models.load_model("model")
+    network.load("model")
 except IOError:
-    model = None
+    network.train(image_patches, "model")
 
-if model == None:
-    model = tf.keras.Sequential(name = "autoencoder")
-    model.add(tf.keras.Input(shape = [patch_size, patch_size, 3]))
-    model.add(tf.keras.layers.Conv2D(filters=48, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "conv1"))
-    #model.add(tf.keras.layers.Conv2D(filters=1, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "conv2"))
-    #model.add(tf.keras.layers.Conv2D(filters=3, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "conv3"))
-    #model.add(tf.keras.layers.Flatten())
-    #model.add(tf.keras.layers.Dense(10))
-    #model.add(tf.keras.layers.Dense(units=8*8*80, activation='relu'))
-    #model.add(tf.keras.layers.Reshape(target_shape=(8, 8, 80)))
-    #model.add(tf.keras.layers.Conv2DTranspose(filters=1, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "deconv3"))
-    #model.add(tf.keras.layers.Conv2DTranspose(filters=48, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "deconv2"))
-    model.add(tf.keras.layers.Conv2DTranspose(filters=3, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "deconv1"))
-    model.summary()
-
-    epochs = 500
-    train_data = tf.data.Dataset.from_tensor_slices(image_patches).batch(128).shuffle(buffer_size = 1024)
-    optimizer = tf.optimizers.RMSprop() 
-    mse_loss = tf.keras.losses.MeanSquaredError() 
-    loss_metric = tf.keras.metrics.Mean()
-
-    # Iterate over epochs.
-    for epoch in range(epochs):
-        print("Start of epoch %d" % (epoch,))
-
-        # Iterate over the batches of the dataset.
-        for step, x_batch_train in enumerate(train_data):
-            with tf.GradientTape() as tape:
-                reconstructed = model(x_batch_train)
-                # Compute reconstruction loss
-                loss = mse_loss(x_batch_train, reconstructed)
-
-            grads = tape.gradient(loss, model.trainable_weights)
-            optimizer.apply_gradients(zip(grads, model.trainable_weights))
-
-            loss_metric(loss)
-
-            if step % 100 == 0:
-                print("step %d: mean loss = %.4f" % (step, loss_metric.result()))
-
-    model.save('model')
-
-reconstructed = model(image_patches)
+reconstructed = network(image_patches)
 
 debug = True
 if debug:
