@@ -72,7 +72,12 @@ class Autoencoder(object):
 
         # use same min loss change value for training
         min_loss_change = tf.constant(0.000001, dtype=tf.float32)
-        init_attempts = 10
+        init_attempts = 20
+
+        # in choosing architecture several advices were used
+        # 1) kernel size divisible by stride https://distill.pub/2016/deconv-checkerboard/
+        # 2) using several layers with small kernels lead to better learning than one with large kernel
+
 
         # now if we don't have trained first layers, train them
         if not conv1_layer:
@@ -81,8 +86,8 @@ class Autoencoder(object):
             for init_attempt in range(init_attempts):
                 model1 =  tf.keras.Sequential(name = "autoencoder-v1")
                 model1.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
-                model1.add(tf.keras.layers.Conv2D(filters=3, kernel_size = 3, strides = 2, padding="same", activation = 'relu', name = "conv1"))
-                model1.add(tf.keras.layers.Conv2DTranspose(filters=3, kernel_size = 3, strides = 2, padding="same", activation = 'relu', name = "deconv1"))
+                model1.add(tf.keras.layers.Conv2D(filters=4, kernel_size = 2, strides = 2, activation = 'relu', name = "conv1"))
+                model1.add(tf.keras.layers.Conv2DTranspose(filters=3, kernel_size = 2, strides = 2, activation = 'relu', name = "deconv1"))
                 print("Training autoencoder v1: attempt", init_attempt)
                 loss = self._train_model(model1, image_patches, min_loss_change, 5000)
                 if loss < best_loss:
@@ -111,8 +116,8 @@ class Autoencoder(object):
                 model2 =  tf.keras.Sequential(name = "autoencoder-v2")
                 model2.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
                 model2.add(conv1_layer)
-                model2.add(tf.keras.layers.Conv2D(filters=4, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "conv2"))
-                model2.add(tf.keras.layers.Conv2DTranspose(filters=2, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "deconv2"))
+                model2.add(tf.keras.layers.Conv2D(filters=6, kernel_size = 2, strides=2, activation = 'relu', name = "conv2"))
+                model2.add(tf.keras.layers.Conv2DTranspose(filters=6, kernel_size = 2, strides=2, activation = 'relu', name = "deconv2"))
                 model2.add(deconv1_layer)
                 print("Training autoencoder v1: attempt", init_attempt)
                 loss = self._train_model(model2, image_patches, min_loss_change, 5000)
@@ -127,8 +132,8 @@ class Autoencoder(object):
             return
 
             # extract layers from model
-            conv2_layer = model2.get_layer("conv2")
-            deconv2_layer = model2.get_layer("deconv2")
+            conv2_layer = best_model.get_layer("conv2")
+            deconv2_layer = best_model.get_layer("deconv2")
 
       
 
@@ -138,24 +143,32 @@ class Autoencoder(object):
 
         # if we don't have trained third layers, also train them
         if not conv3_layer:
-            model3 =  tf.keras.Sequential(name = "autoencoder-v3")
-            model3.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
-            model3.add(conv1_layer)
-            model3.add(conv2_layer)
-            model3.add(tf.keras.layers.Conv2D(filters=9, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "conv3"))
-            model3.add(tf.keras.layers.Conv2DTranspose(filters=6, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "deconv3"))
-            model3.add(deconv2_layer)
-            model3.add(deconv1_layer)
-            print("Training autoencoder v3")
-            self._train_model(model3, image_patches, min_loss_change)
-            model3.save(path + "\\v3")
+            best_model = None
+            best_loss = tf.constant(100.0, dtype=tf.float32)
+            for init_attempt in range(init_attempts):
+                model3 =  tf.keras.Sequential(name = "autoencoder-v3")
+                model3.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
+                model3.add(conv1_layer)
+                model3.add(conv2_layer)
+                model3.add(tf.keras.layers.Conv2D(filters=12, kernel_size = 4, strides = 4, activation = 'relu', name = "conv3"))
+                model3.add(tf.keras.layers.Conv2DTranspose(filters=12, kernel_size = 4, strides=4, activation = 'relu', name = "deconv3"))
+                model3.add(deconv2_layer)
+                model3.add(deconv1_layer)
+                print("Training autoencoder v3: attempt", init_attempt)
+                loss = self._train_model(model3, image_patches, min_loss_change, 5000)
+                if loss < best_loss:
+                    best_loss = loss
+                    best_model = model3
 
-            #self._model = model3
-            #return
+            best_model.save(path + "\\v3")
+            print("best loss is %.6f" % best_loss)
+
+            self._model = best_model
+            return
 
             # extract layers from model
-            conv3_layer = model3.get_layer("conv3")
-            deconv3_layer = model3.get_layer("deconv3")
+            conv3_layer = best_model.get_layer("conv3")
+            deconv3_layer = best_model.get_layer("deconv3")
         
         # freeze third layers
         conv3_layer.trainable = False
@@ -168,7 +181,7 @@ class Autoencoder(object):
         model4.add(conv2_layer)
         model4.add(conv3_layer)
         model4.add(tf.keras.layers.Conv2D(filters=15, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "conv4"))
-        model4.add(tf.keras.layers.Conv2DTranspose(filters=9, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "deconv4"))
+        model4.add(tf.keras.layers.Conv2DTranspose(filters=9, kernel_size = 3, strides=3, padding="same", activation = 'relu', name = "deconv4"))
         model4.add(deconv3_layer)
         model4.add(deconv2_layer)
         model4.add(deconv1_layer)
