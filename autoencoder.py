@@ -32,7 +32,7 @@ class Autoencoder(object):
         return super().__init__(*args, **kwargs)
 
     def load(self, path):
-         self._model = tf.keras.models.load_model(path + "\\v1")
+         self._model = tf.keras.models.load_model(path + "\\v2")
          self._model.summary()
 
     def train(self, image_patches, path):
@@ -116,7 +116,7 @@ class Autoencoder(object):
                 model2 =  tf.keras.Sequential(name = "autoencoder-v2")
                 model2.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
                 model2.add(conv1_layer)
-                model2.add(tf.keras.layers.Conv2D(filters=2, kernel_size = 2, strides=2, activation = 'relu', name = "conv2"))
+                model2.add(tf.keras.layers.Conv2D(filters=12, kernel_size = 2, strides=2, activation = 'relu', name = "conv2"))
                 model2.add(tf.keras.layers.Conv2DTranspose(filters=5, kernel_size = 2, strides=2, activation = 'relu', name = "deconv2"))
                 model2.add(deconv1_layer)
                 print("Training autoencoder v1: attempt", init_attempt)
@@ -197,7 +197,7 @@ class Autoencoder(object):
 
         logging = AutoencoderLogger(image_patches, 50)
         stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=100, mode='min')
-        history = model.fit(image_patches, image_patches, 512, max_epoch, verbose=0, callbacks=[logging, stopping])
+        history = model.fit(image_patches, image_patches, 128, max_epoch, verbose=0, callbacks=[logging, stopping])
         return history.history["loss"][-1]
 
     def __call__(self, data):
