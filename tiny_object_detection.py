@@ -1,9 +1,42 @@
-import os
+import os, sys, logging, argparse
 #os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import autoencoder
+
+# разбираем входящие параметры
+parser = argparse.ArgumentParser(description='Tiny object detection training script')
+parser.add_argument('--log', help='Path to a log file.')
+script_args = parser.parse_args()
+
+# setup logging before anything else
+log_format = '%(asctime)s: <%(levelname)s> %(message)s'
+if script_args.log:
+    try:
+        error_stream = logging.StreamHandler()
+        error_stream.setLevel(logging.INFO)
+        log_file = logging.FileHandler(script_args.log)
+        logging.basicConfig(format=log_format, level=logging.INFO, handlers=[error_stream, log_file])
+    except OSError as err:
+        print("Error while creating log {}: {}. Exiting...".format(err.filename, err.strerror))
+        input("Press Enter to continue...")
+        sys.exit(1)
+else:
+    logging.basicConfig(format=log_format, level=logging.INFO)
+
+# now we can setup hooks for uncaught exceptions
+def handle_exception(exc_type, exc_value, exc_traceback):
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+
+    logging.error("Uncaught exception", exc_info=(exc_type, exc_value, exc_traceback))
+
+sys.excepthook = handle_exception
+
+# giving message that log is indeed initialized
+print("Log initialized")
 
 #tf.debugging.set_log_device_placement(True)
 
@@ -87,7 +120,7 @@ plt.imshow(output[0])
 plt.show()
 
 
-print("max loss is", max_loss)
+logging.info("max loss is %f", max_loss)
 
 fig=plt.figure(figsize=(15, 4))
 fig.add_subplot(1, 2, 1)

@@ -1,4 +1,5 @@
 import tensorflow as tf
+import logging
 from pathlib import Path
 
 class AutoencoderLogger(tf.keras.callbacks.Callback):
@@ -22,7 +23,7 @@ class AutoencoderLogger(tf.keras.callbacks.Callback):
              delta = self.last_loss - loss
          self.last_loss = loss
 
-         print('Epoch {0}, loss {1:0.6f}, change {2:0.6f}'.format(epoch, loss, delta))
+         logging.info('Epoch %d, loss %0.6f, change %0.6f', epoch, loss, delta)
 
 class Autoencoder(object):
     """autoencoder for tiny object detection"""
@@ -32,7 +33,7 @@ class Autoencoder(object):
         return super().__init__(*args, **kwargs)
 
     def load(self, path):
-         self._model = tf.keras.models.load_model(path + "\\v2")
+         self._model = tf.keras.models.load_model(path + "\\v1")
          self._model.summary()
 
     def train(self, image_patches, path):
@@ -71,12 +72,12 @@ class Autoencoder(object):
                     pass
 
         # use same min loss change value for training
-        min_loss_change = tf.constant(0.000001, dtype=tf.float32)
-        init_attempts = 20
+        min_loss_change = tf.constant(0.00001, dtype=tf.float32)
+        init_attempts = 10
 
         # in choosing architecture several advices were used
         # 1) kernel size divisible by stride https://distill.pub/2016/deconv-checkerboard/
-        # 2) using several layers with small kernels lead to better learning than one with large kernel
+        # 2) using several layers with small kernels leads to better learning than one with large kernel
 
 
         # now if we don't have trained first layers, train them
@@ -86,16 +87,17 @@ class Autoencoder(object):
             for init_attempt in range(init_attempts):
                 model1 =  tf.keras.Sequential(name = "autoencoder-v1")
                 model1.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
-                model1.add(tf.keras.layers.Conv2D(filters=5, kernel_size = 2, strides = 2, activation = 'relu', name = "conv1"))
+                model1.add(tf.keras.layers.Conv2D(filters=4, kernel_size = 2, strides = 2, activation = 'relu', name = "conv1"))
                 model1.add(tf.keras.layers.Conv2DTranspose(filters=3, kernel_size = 2, strides = 2, activation = 'relu', name = "deconv1"))
-                print("Training autoencoder v1: attempt", init_attempt)
-                loss = self._train_model(model1, image_patches, min_loss_change, 5000)
+                logging.info("Training autoencoder v1: attempt %d", init_attempt)
+                loss = self._train_model(model1, image_patches, min_loss_change, 1000, 0.001)
                 if loss < best_loss:
                     best_loss = loss
                     best_model = model1
 
+           
             best_model.save(path + '\\v1')
-            print("best loss is %.6f" % best_loss)
+            logging.info("Best loss is %.6f", best_loss)
 
             self._model = best_model
             return
@@ -119,14 +121,14 @@ class Autoencoder(object):
                 model2.add(tf.keras.layers.Conv2D(filters=12, kernel_size = 2, strides=2, activation = 'relu', name = "conv2"))
                 model2.add(tf.keras.layers.Conv2DTranspose(filters=5, kernel_size = 2, strides=2, activation = 'relu', name = "deconv2"))
                 model2.add(deconv1_layer)
-                print("Training autoencoder v1: attempt", init_attempt)
-                loss = self._train_model(model2, image_patches, min_loss_change, 5000)
+                logging.info("Training autoencoder v2: attempt %d", init_attempt)
+                loss = self._train_model(model2, image_patches, min_loss_change, 5000, 0.001)
                 if loss < best_loss:
                     best_loss = loss
                     best_model = model2
 
             best_model.save(path + '\\v2')
-            print("best loss is %.6f" % best_loss)
+            logging.info("Best loss is %.6f", best_loss)
 
             self._model = best_model
             return
@@ -150,18 +152,18 @@ class Autoencoder(object):
                 model3.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
                 model3.add(conv1_layer)
                 model3.add(conv2_layer)
-                model3.add(tf.keras.layers.Conv2D(filters=12, kernel_size = 4, strides = 4, activation = 'relu', name = "conv3"))
-                model3.add(tf.keras.layers.Conv2DTranspose(filters=12, kernel_size = 4, strides=4, activation = 'relu', name = "deconv3"))
+                model3.add(tf.keras.layers.Conv2D(filters=40, kernel_size = 2, strides = 2, activation = 'relu', name = "conv3"))
+                model3.add(tf.keras.layers.Conv2DTranspose(filters=12, kernel_size=2, strides=2, activation = 'relu', name = "deconv3"))
                 model3.add(deconv2_layer)
                 model3.add(deconv1_layer)
-                print("Training autoencoder v3: attempt", init_attempt)
-                loss = self._train_model(model3, image_patches, min_loss_change, 5000)
+                logging.info("Training autoencoder v3: attempt %d", init_attempt)
+                loss = self._train_model(model3, image_patches, min_loss_change, 1000, 0.001)
                 if loss < best_loss:
                     best_loss = loss
                     best_model = model3
 
             best_model.save(path + "\\v3")
-            print("best loss is %.6f" % best_loss)
+            logging.info("Best loss is %.6f", best_loss)
 
             self._model = best_model
             return
@@ -191,13 +193,13 @@ class Autoencoder(object):
             
         self._model = model4
 
-    def _train_model(self, model, image_patches, min_loss_change, max_epoch):
-        model.summary()
-        model.compile(loss=tf.losses.MeanSquaredError(), optimizer=tf.optimizers.RMSprop())
+    def _train_model(self, model, image_patches, min_loss_change, max_epoch, lr):
+        model.summary(print_fn=lambda x: logging.info(x))
+        model.compile(loss=tf.losses.MeanSquaredError(), optimizer=tf.optimizers.Adam(learning_rate = lr))
 
-        logging = AutoencoderLogger(image_patches, 50)
-        stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=100, mode='min')
-        history = model.fit(image_patches, image_patches, 128, max_epoch, verbose=0, callbacks=[logging, stopping])
+        logger = AutoencoderLogger(image_patches, 50)
+        stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=100, mode='min', min_delta=min_loss_change)
+        history = model.fit(image_patches, image_patches, 128, max_epoch, verbose=0, callbacks=[logger, stopping])
         return history.history["loss"][-1]
 
     def __call__(self, data):
