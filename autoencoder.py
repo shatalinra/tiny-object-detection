@@ -33,7 +33,7 @@ class Autoencoder(object):
         return super().__init__(*args, **kwargs)
 
     def load(self, path):
-         self._model = tf.keras.models.load_model(path + "\\v1")
+         self._model = tf.keras.models.load_model(path + "\\v2")
          self._model.summary()
 
     def train(self, image_patches, path):
@@ -118,11 +118,11 @@ class Autoencoder(object):
                 model2 =  tf.keras.Sequential(name = "autoencoder-v2")
                 model2.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
                 model2.add(conv1_layer)
-                model2.add(tf.keras.layers.Conv2D(filters=12, kernel_size = 2, strides=2, activation = 'relu', name = "conv2"))
-                model2.add(tf.keras.layers.Conv2DTranspose(filters=5, kernel_size = 2, strides=2, activation = 'relu', name = "deconv2"))
+                model2.add(tf.keras.layers.Conv2D(filters=13, kernel_size = 2, strides=2, activation = 'relu', name = "conv2"))
+                model2.add(tf.keras.layers.Conv2DTranspose(filters=4, kernel_size = 2, strides=2, activation = 'relu', name = "deconv2"))
                 model2.add(deconv1_layer)
                 logging.info("Training autoencoder v2: attempt %d", init_attempt)
-                loss = self._train_model(model2, image_patches, min_loss_change, 5000, 0.001)
+                loss = self._train_model(model2, image_patches, min_loss_change, 1500, 0.002)
                 if loss < best_loss:
                     best_loss = loss
                     best_model = model2
