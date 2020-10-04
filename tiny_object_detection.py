@@ -77,7 +77,7 @@ debug = True
 if debug:
     
     fig=plt.figure(figsize=(15, 4))
-    offset = 32 * test_patches_count[0] + 9
+    offset = int(368 / stride) * test_patches_count[1] + int(480 / stride)
     cols = 10
     for i in range(1, cols):
         fig.add_subplot(2, cols, i)
@@ -89,13 +89,13 @@ if debug:
 # search for patch with max loss
 max_loss = tf.constant(0, dtype=tf.float32)
 max_loss_pos = None
-for i in range(test_patches_count[1]):
-    for j in range(test_patches_count[0]):
-        src_patch = test_image_patches[i * test_patches_count[0] + j]
-        reconstructed_patch = reconstructed[i * test_patches_count[0] + j]
+for i in range(test_patches_count[0]):
+    for j in range(test_patches_count[1]):
+        src_patch = test_image_patches[i * test_patches_count[1] + j]
+        reconstructed_patch = reconstructed[i * test_patches_count[1] + j]
         diff = tf.math.abs(src_patch - reconstructed_patch)
         loss = tf.reduce_mean(diff)
-        if i == 32 and j == 10:
+        if i == int(368 / stride) and j == int(480 / stride):
             fig=plt.figure(figsize=(15, 4))
             fig.add_subplot(1, 2, 1)
             plt.imshow(src_patch)
@@ -108,8 +108,8 @@ for i in range(test_patches_count[1]):
             max_loss_pos = [i, j]
 
 # draw rect on src image
-x = max_loss_pos[1] / test_patches_count[0]
-y = max_loss_pos[0] / test_patches_count[1]
+x = max_loss_pos[1] / test_patches_count[1]
+y = max_loss_pos[0] / test_patches_count[0]
 width = patch_size / test_image_size[0]
 height = patch_size / test_image_size[1]
 box = tf.convert_to_tensor([[[x, y, x + width, y + height]]], dtype=tf.float32)
