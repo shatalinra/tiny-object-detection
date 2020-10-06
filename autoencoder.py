@@ -43,7 +43,7 @@ class Autoencoder(object):
         return super().__init__(*args, **kwargs)
 
     def load(self, path):
-         self._model = tf.keras.models.load_model(path + "\\v2")
+         self._model = tf.keras.models.load_model(path + "\\v3")
          self._model.summary()
 
     def train(self, image_patches, path):
@@ -167,13 +167,19 @@ class Autoencoder(object):
                 model3 =  tf.keras.Sequential(name = "autoencoder-v3")
                 model3.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
                 model3.add(conv1_layer)
+                model3.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv1-leaky"))
                 model3.add(conv2_layer)
-                model3.add(tf.keras.layers.Conv2D(filters=13, kernel_size = 2, strides = 2, activation = 'relu', name = "conv3"))
-                model3.add(tf.keras.layers.Conv2DTranspose(filters=13, kernel_size=2, strides=2, activation = 'relu', name = "deconv3"))
+                model3.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv2-leaky"))
+                model3.add(tf.keras.layers.Conv2D(filters=20, kernel_size = 2, strides = 2, name = "conv3"))
+                model3.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv3-leaky"))
+                model3.add(tf.keras.layers.Conv2DTranspose(filters=10, kernel_size=2, strides=2, name = "deconv3"))
+                model3.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "deconv3-leaky"))
                 model3.add(deconv2_layer)
+                model3.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "deconv2-leaky"))
                 model3.add(deconv1_layer)
+                model3.add(tf.keras.layers.Activation('sigmoid', name = "deconv1-sigmoid"))
                 logging.info("Training autoencoder v3: attempt %d", init_attempt)
-                loss = self._train_model(model3, image_patches, 128, min_loss_change, 1500, tf.optimizers.Adam())
+                loss = self._train_model(model3, image_patches, min_loss_change, 1500)
                 if loss < best_loss:
                     best_loss = loss
                     best_model = model3
