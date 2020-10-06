@@ -43,7 +43,7 @@ class Autoencoder(object):
         return super().__init__(*args, **kwargs)
 
     def load(self, path):
-         self._model = tf.keras.models.load_model(path + "\\v1")
+         self._model = tf.keras.models.load_model(path + "\\v2")
          self._model.summary()
 
     def train(self, image_patches, path):
@@ -133,9 +133,9 @@ class Autoencoder(object):
                 model2.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
                 model2.add(conv1_layer)
                 model2.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv1-leaky"))
-                model2.add(tf.keras.layers.Conv2D(filters=10, kernel_size = 2, strides=2, name = "conv2"))
+                model2.add(tf.keras.layers.Conv2D(filters=20, kernel_size = 2, strides=2, name = "conv2"))
                 model2.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv2-leaky"))
-                model2.add(tf.keras.layers.Conv2DTranspose(filters=4, kernel_size = 2, strides=2, name = "deconv2"))
+                model2.add(tf.keras.layers.Conv2DTranspose(filters=7, kernel_size = 2, strides=2, name = "deconv2"))
                 model2.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "deconv2-leaky"))
                 model2.add(deconv1_layer)
                 model2.add(tf.keras.layers.Activation('sigmoid', name = "deconv1-sigmoid"))
