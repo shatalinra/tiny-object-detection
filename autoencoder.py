@@ -26,7 +26,7 @@ class AutoencoderTraining(tf.keras.callbacks.Callback):
             delta = self.last_loss - loss
         self.last_loss = loss
          
-        logging.info('Epoch %d, loss %0.6f, change %0.6f, grad norm %0.6f', epoch, loss, delta, tf.linalg.global_norm(grad))
+        logging.info('Epoch %d, loss %0.6f, change %0.6f, grad norm %0.6f, lr %0.6f', epoch, loss, delta, tf.linalg.global_norm(grad), self.model.optimizer.lr)
 
 class AutoencoderLearningRate(tf.keras.callbacks.Callback):
     def __init__(self, initial_learning_rate, update_rate):
@@ -43,7 +43,7 @@ class Autoencoder(object):
         return super().__init__(*args, **kwargs)
 
     def load(self, path):
-         self._model = tf.keras.models.load_model(path + "\\v3")
+         self._model = tf.keras.models.load_model(path + "\\v1")
          self._model.summary()
 
     def train(self, image_patches, path):
@@ -55,6 +55,8 @@ class Autoencoder(object):
         conv1_layer = None
         conv2_layer = None
         conv3_layer = None
+        conv4_layer = None
+        deconv4_layer = None
         deconv3_layer = None
         deconv2_layer = None
         deconv1_layer = None
@@ -97,7 +99,7 @@ class Autoencoder(object):
             for init_attempt in range(init_attempts):
                 model1 =  tf.keras.Sequential(name = "autoencoder-v1")
                 model1.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
-                model1.add(tf.keras.layers.Conv2D(filters=4, kernel_size = 2, strides = 2, kernel_initializer= 'glorot_normal', name = "conv1"))
+                model1.add(tf.keras.layers.Conv2D(filters=7, kernel_size = 2, strides = 2, kernel_initializer= 'glorot_normal', name = "conv1"))
                 model1.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv1-leaky"))
                 model1.add(tf.keras.layers.Conv2DTranspose(filters=3, kernel_size = 2, strides = 2, name = "deconv1"))
                 model1.add(tf.keras.layers.Activation('sigmoid', name = "deconv1-sigmoid"))
@@ -199,29 +201,54 @@ class Autoencoder(object):
         deconv3_layer.trainable = False
 
         # train last layers
-        model4 =  tf.keras.Sequential(name = "autoencoder-v4")
-        model4.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
-        model4.add(conv1_layer)
-        model4.add(conv2_layer)
-        model4.add(conv3_layer)
-        model4.add(tf.keras.layers.Conv2D(filters=15, kernel_size = 3, strides=2, padding="same", activation = 'relu', name = "conv4"))
-        model4.add(tf.keras.layers.Conv2DTranspose(filters=9, kernel_size = 3, strides=3, padding="same", activation = 'relu', name = "deconv4"))
-        model4.add(deconv3_layer)
-        model4.add(deconv2_layer)
-        model4.add(deconv1_layer)
-        print("Training autoencoder v4")
-        self._train_model(model4, image_patches, min_loss_change)
-        model4.save(path + "\\v4")
+        if not conv4_layer:
+            best_model = None
+            best_loss = tf.constant(100.0, dtype=tf.float32)
+            for init_attempt in range(init_attempts):
+                model4 =  tf.keras.Sequential(name = "autoencoder-v4")
+                model4.add(tf.keras.Input(shape = [self._patch_size, self._patch_size, 3]))
+                model4.add(conv1_layer)
+                model4.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv1-leaky"))
+                model4.add(conv2_layer)
+                model4.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv2-leaky"))
+                model4.add(conv3_layer)
+                model4.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv3-leaky"))
+                model4.add(tf.keras.layers.Conv2D(filters=40, kernel_size = 2, strides = 2, name = "conv4"))
+                model4.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "conv4-leaky"))
+                model4.add(tf.keras.layers.Conv2DTranspose(filters=20, kernel_size=2, strides=2, name = "deconv4"))
+                model4.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "deconv4-leaky"))
+                model4.add(deconv3_layer)
+                model4.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "deconv3-leaky"))
+                model4.add(deconv2_layer)
+                model4.add(tf.keras.layers.LeakyReLU(alpha = 0.1, name = "deconv2-leaky"))
+                model4.add(deconv1_layer)
+                model4.add(tf.keras.layers.Activation('sigmoid', name = "deconv1-sigmoid"))
+                logging.info("Training autoencoder v3: attempt %d", init_attempt)
+                loss = self._train_model(model4, image_patches, min_loss_change, 1500)
+                if loss < best_loss:
+                    best_loss = loss
+                    best_model = model4
+
+            best_model.save(path + "\\v4")
+            logging.info("Best loss is %.6f", best_loss)
+
+            self._model = best_model
+            return
+
+            # extract layers from model
+            conv4_layer = best_model.get_layer("conv4")
+            deconv4_layer = best_model.get_layer("deconv4")
             
-        self._model = model4
+        self._model = best_model
 
     def _train_model(self, model, image_patches, min_loss_change, max_epoch):
         model.summary(print_fn=lambda x: logging.info(x))
         model.compile(loss=tf.losses.MeanSquaredError(), optimizer=tf.optimizers.Adam(learning_rate = 0.01))
 
         callback = AutoencoderTraining(image_patches, 20)
+        reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.5, patience=15, min_lr=0.001, min_delta=min_loss_change)
         stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=30, mode='min', min_delta=min_loss_change)
-        history = model.fit(image_patches, image_patches, 128, max_epoch, verbose=0, callbacks=[callback, stopping])
+        history = model.fit(image_patches, image_patches, 128, max_epoch, verbose=0, callbacks=[callback, reduce_lr, stopping])
         return history.history["loss"][-1]
 
     def __call__(self, data):
